@@ -13,6 +13,7 @@ interface Vehicle {
   status?: string;
   isEngineOn?: boolean;
   isOverSpeed?: boolean;
+  heading?: number;
 }
 
 interface FleetMapProps {
@@ -40,6 +41,7 @@ const FleetMap: React.FC<FleetMapProps> = ({
         lng: v.lng,
         name: v.name || 'Vehicle',
         status: v.status || '',
+        heading: v.heading || 0,
       }));
       
       webViewRef.current.postMessage(JSON.stringify({
@@ -55,18 +57,25 @@ const FleetMap: React.FC<FleetMapProps> = ({
   }, [vehicles]);
 
   const lastSelectedIdRef = useRef<string | null>(null);
+  const lastSelectedPosRef = useRef<{ lat: number; lng: number } | null>(null);
 
-  // Send selection updates (FlyTo)
+  // Send selection updates (FlyTo) - also centers when selected vehicle moves
   useEffect(() => {
     if (selectedVehicle && webViewRef.current) {
-      // Only fly if ID changed
-      if (selectedVehicle.id !== lastSelectedIdRef.current) {
+      const posChanged = lastSelectedPosRef.current && 
+        (lastSelectedPosRef.current.lat !== selectedVehicle.lat || 
+         lastSelectedPosRef.current.lng !== selectedVehicle.lng);
+      
+      // Fly if ID changed or position changed for selected vehicle
+      if (selectedVehicle.id !== lastSelectedIdRef.current || posChanged) {
         webViewRef.current.postMessage(JSON.stringify({
           type: 'selectVehicle',
           id: selectedVehicle.id,
-          center: [selectedVehicle.lng, selectedVehicle.lat]
+          center: [selectedVehicle.lng, selectedVehicle.lat],
+          smooth: posChanged // Use smooth pan if just position update
         }));
         lastSelectedIdRef.current = selectedVehicle.id;
+        lastSelectedPosRef.current = { lat: selectedVehicle.lat, lng: selectedVehicle.lng };
       }
     }
   }, [selectedVehicle]);
@@ -79,6 +88,7 @@ const FleetMap: React.FC<FleetMapProps> = ({
       lng: v.lng,
       name: v.name || 'Vehicle',
       status: v.status || '',
+      heading: v.heading || 0,
     })));
 
     // Robust SVG injection using encodeURIComponent
@@ -232,7 +242,7 @@ const FleetMap: React.FC<FleetMapProps> = ({
           <div class="label-title">\${vehicle.name}</div>
           <div class="label-subtitle">\${vehicle.status}</div>
         </div>
-        <div class="marker-icon">
+        <div class="marker-icon" style="transform: rotate(\${vehicle.heading || 0}deg);">
           <div class="marker-pulse \${vehicle.isSelected ? 'selected' : ''}"></div>
           <img src="\${svgDataUri}" class="marker-svg" />
         </div>
@@ -265,16 +275,22 @@ const FleetMap: React.FC<FleetMapProps> = ({
           // Update position
           markers[vehicle.id].setLngLat([vehicle.lng, vehicle.lat]);
           
-          // Update label text (status)
+          // Update label text (status) and rotation
           const markerEl = document.getElementById('marker-' + vehicle.id);
           if (markerEl) {
             const titleEl = markerEl.querySelector('.label-title');
             const subtitleEl = markerEl.querySelector('.label-subtitle');
+            const iconEl = markerEl.querySelector('.marker-icon');
+            
             if (titleEl) titleEl.textContent = vehicle.name;
             if (subtitleEl) {
               subtitleEl.textContent = vehicle.status;
               // Update color based on status
               subtitleEl.style.color = vehicle.status.toLowerCase() === 'online' ? '#10B981' : '#EF4444';
+            }
+            // Update rotation based on heading
+            if (iconEl) {
+              iconEl.style.transform = 'rotate(' + (vehicle.heading || 0) + 'deg)';
             }
           }
         } else {
@@ -288,7 +304,7 @@ const FleetMap: React.FC<FleetMapProps> = ({
       });
     }
 
-    function selectVehicle(id, center) {
+    function selectVehicle(id, center, smooth) {
       // Update UI
       document.querySelectorAll('.marker-label').forEach(l => l.classList.remove('visible'));
       document.querySelectorAll('.marker-pulse').forEach(p => p.classList.remove('selected'));
@@ -299,15 +315,21 @@ const FleetMap: React.FC<FleetMapProps> = ({
         markerEl.querySelector('.marker-pulse').classList.add('selected');
       }
 
-      // Fly To
+      // Center map on vehicle
       if (center) {
-        map.flyTo({
-          center: center,
-          zoom: 16,
-          speed: 1.2, // Smooth speed
-          curve: 1.42,
-          essential: true
-        });
+        if (smooth) {
+          // Smooth pan for following movement
+          map.panTo(center, { duration: 500 });
+        } else {
+          // Fly for initial selection
+          map.flyTo({
+            center: center,
+            zoom: 16,
+            speed: 1.2,
+            curve: 1.42,
+            essential: true
+          });
+        }
       }
     }
 
@@ -324,7 +346,7 @@ const FleetMap: React.FC<FleetMapProps> = ({
         if (data.type === 'updateVehicles') {
           updateMarkers(data.vehicles);
         } else if (data.type === 'selectVehicle') {
-          selectVehicle(data.id, data.center);
+          selectVehicle(data.id, data.center, data.smooth);
         }
       } catch (e) {
         console.error('Error parsing message', e);

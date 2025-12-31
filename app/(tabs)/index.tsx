@@ -18,6 +18,7 @@ interface Vehicle {
   isOverSpeed?: boolean;
   imageUrl?: string;
   userId?: string;
+  heading?: number;
 }
 
 const { width } = Dimensions.get('window');
@@ -29,6 +30,21 @@ export default function FleetManagementScreen() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const isInitializedRef = React.useRef(false);
+  const previousPositionsRef = useRef<{ [key: string]: { lat: number; lng: number; heading?: number } }>({});
+
+  // Calculate bearing/heading from two points
+  const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const toDeg = (rad: number) => (rad * 180) / Math.PI;
+    
+    const dLng = toRad(lng2 - lng1);
+    const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - 
+              Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+    
+    let bearing = toDeg(Math.atan2(y, x));
+    return (bearing + 360) % 360; // Normalize to 0-360
+  };
 
   useEffect(() => {
     if (!driver?.userId) return;
@@ -40,10 +56,35 @@ export default function FleetManagementScreen() {
       if (data) {
         const vehicleList: Vehicle[] = Object.keys(data).map((key) => {
           const vehicleData = data[key];
+          const currentLat = vehicleData.lat || vehicleData.latitude || 0;
+          const currentLng = vehicleData.lng || vehicleData.longitude || vehicleData.long || 0;
+          
+          // Get stored heading or from database
+          const prevData = previousPositionsRef.current[key];
+          let heading = prevData?.heading ?? vehicleData.heading;
+          
+          // Only calculate new bearing if position actually changed
+          if (prevData) {
+            const latChanged = Math.abs(prevData.lat - currentLat) > 0.00001;
+            const lngChanged = Math.abs(prevData.lng - currentLng) > 0.00001;
+            
+            if (latChanged || lngChanged) {
+              // Position changed significantly, calculate new bearing
+              heading = calculateBearing(prevData.lat, prevData.lng, currentLat, currentLng);
+            }
+            // If no change, keep previous heading
+          } else if (heading === undefined) {
+            // First load, use random if not set in database
+            heading = Math.floor(Math.random() * 360);
+          }
+          
+          // Store current position AND heading for next comparison
+          previousPositionsRef.current[key] = { lat: currentLat, lng: currentLng, heading: heading };
+          
           return {
             id: key,
-            lat: vehicleData.lat || vehicleData.latitude || 0,
-            lng: vehicleData.lng || vehicleData.longitude || vehicleData.long || 0,
+            lat: currentLat,
+            lng: currentLng,
             name: vehicleData.name || 'Unknown Vehicle',
             plateNumber: vehicleData.plateNumber || '',
             status: vehicleData.status || 'Offline',
@@ -53,6 +94,7 @@ export default function FleetManagementScreen() {
             isOverSpeed: vehicleData.isOverSpeed || false,
             imageUrl: vehicleData.imageUrl,
             userId: vehicleData.userId,
+            heading: heading,
           };
         });
         setVehicles(vehicleList);
@@ -179,6 +221,7 @@ export default function FleetManagementScreen() {
         time: 'Just Now',
         address: 'Surabaya, Indonesia',
         imageUrl: IMAGES[idx % IMAGES.length],
+        heading: Math.floor(Math.random() * 360), // Random direction 0-360
         userId: driver.userId
       });
       Alert.alert('Success', `Added ${BRANDS[idx]} to Fleet`);
@@ -266,19 +309,25 @@ export default function FleetManagementScreen() {
                   {/* Status Indicators */}
                   <View style={styles.statusIndicators}>
                     <TouchableOpacity 
-                      style={styles.statusItem} 
+                      style={[
+                        styles.switchButton,
+                        { backgroundColor: vehicle.isEngineOn ? '#DCFCE7' : '#F1F5F9' }
+                      ]} 
                       onPress={() => handleToggleEngine(vehicle)}
                     >
                       <View style={[
-                        styles.statusDot, 
+                        styles.switchDot, 
                         { backgroundColor: vehicle.isEngineOn ? '#22C55E' : '#94A3B8' }
                       ]} />
-                      <Text style={styles.statusLabel}>Switch {vehicle.isEngineOn ? 'On' : 'Off'}</Text>
+                      <Text style={[
+                        styles.switchLabel,
+                        { color: vehicle.isEngineOn ? '#16A34A' : '#64748B' }
+                      ]}>Engine {vehicle.isEngineOn ? 'On' : 'Off'}</Text>
                     </TouchableOpacity>
 
                     <View style={styles.statusItem}>
                       <View style={[
-                        styles.statusDot, 
+                        styles.switchDot, 
                         { backgroundColor: vehicle.isOverSpeed ? '#EF4444' : '#94A3B8' }
                       ]} />
                       <Text style={styles.statusLabel}>Over Speed</Text>
@@ -456,21 +505,33 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 15,
     marginTop: 6,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   statusIndicators: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 10,
+  },
+  switchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 5,
+  },
+  switchDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  switchLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   statusItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
   statusLabel: {
     fontSize: 12,
