@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "844821073092",
+    "firebase_url": "https://velinked-web-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "velinked-web",
+    "storage_bucket": "velinked-web.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:844821073092:android:745f74a38cc80b60ec0d91",
+        "android_client_info": {
+          "package_name": "com.veapps.fleetmanagement"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "844821073092-1ktiq064q6cipmm8r69ktj0tnqlo48qf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrN9w2L8v-orsWQeTLxwYbLZDze_nsM9w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "844821073092-1ktiq064q6cipmm8r69ktj0tnqlo48qf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
