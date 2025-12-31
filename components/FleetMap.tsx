@@ -264,6 +264,19 @@ const FleetMap: React.FC<FleetMapProps> = ({
         if (markers[vehicle.id]) {
           // Update position
           markers[vehicle.id].setLngLat([vehicle.lng, vehicle.lat]);
+          
+          // Update label text (status)
+          const markerEl = document.getElementById('marker-' + vehicle.id);
+          if (markerEl) {
+            const titleEl = markerEl.querySelector('.label-title');
+            const subtitleEl = markerEl.querySelector('.label-subtitle');
+            if (titleEl) titleEl.textContent = vehicle.name;
+            if (subtitleEl) {
+              subtitleEl.textContent = vehicle.status;
+              // Update color based on status
+              subtitleEl.style.color = vehicle.status.toLowerCase() === 'online' ? '#10B981' : '#EF4444';
+            }
+          }
         } else {
           // Create new
           const el = createMarkerElement(vehicle);
